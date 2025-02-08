@@ -1,5 +1,3 @@
-import os
-import json
 import requests
 from pathlib import Path
 from django.conf import settings
@@ -10,6 +8,10 @@ import google.generativeai as genai
 from jinja2 import Environment, FileSystemLoader
 from mygene.models import Patient
 from mygene.settings import GEMINI_API_KEY, RUNPOD_ENDPOINT_URL
+from django.http import JsonResponse
+import requests
+import pandas as pd
+import io
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
@@ -20,11 +22,11 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 template_dir = Path(__file__).resolve().parent / "templates"
 env = Environment(loader=FileSystemLoader(str(template_dir)))
 
-
+from django.utils.timezone import now
+from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
-import requests
-import pandas as pd
-import io
+import json
+from mygene.models import ChatSession, Patient
 
 
 @csrf_exempt
@@ -34,8 +36,11 @@ def process_csv_and_generate_treatment_plan(request):
     Accepts a CSV file, sends it to the Runpod endpoint for disease prediction,
     and generates a treatment plan based on the prediction.
     """
-    # Check if file exists in request
     query = request.POST.get("query", "Comprehensive treatment plan")
+    patient_id = request.POST.get("patient_id")
+
+    if not patient_id:
+        return JsonResponse({"error": "Patient ID is required."}, status=400)
 
     if "file" not in request.FILES:
         return JsonResponse({"error": "CSV file is required."}, status=400)
@@ -43,100 +48,90 @@ def process_csv_and_generate_treatment_plan(request):
     try:
         csv_file = request.FILES["file"]
 
-        # Validate file type
         if not csv_file.name.endswith(".csv"):
             return JsonResponse({"error": "File must be a CSV."}, status=400)
 
-        # Read the CSV file content
-        try:
-            # Read the file content
-            file_content = csv_file.read()
+        file_content = csv_file.read()
+        files = {"file": (csv_file.name, file_content, "text/csv")}
 
-            # Prepare the file for upload
-            files = {"file": (csv_file.name, file_content, "text/csv")}
+        # Send to Runpod for prediction
+        response = requests.post(
+            "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=files
+        )
 
-            # Send to Runpod endpoint
-            response = requests.post(
-                "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=files
+        if response.status_code != 200:
+            return JsonResponse(
+                {"error": "Error from Runpod", "details": response.text},
+                status=response.status_code,
             )
 
-            if response.status_code == 200:
-                try:
-                    # Try to parse the response content
-                    response_data = response.content.decode("utf-8")
+        try:
+            response_data = response.content.decode("utf-8")
 
-                    # Try to read as CSV if the response is in CSV format
-                    try:
-                        df = pd.read_csv(io.StringIO(response_data))
-                        prediction_data = df.to_dict("records")[
-                            0
-                        ]  # Get first row as dictionary
-                    except:
-                        # If not CSV, try JSON
-                        prediction_data = response.json()
+            try:
+                df = pd.read_csv(io.StringIO(response_data))
+                prediction_data = df.to_dict("records")[0]
+            except:
+                prediction_data = response.json()
 
-                    disease_prediction = prediction_data.get("prediction")
-                    disease_info = prediction_data.get("disease_info")
+            disease_prediction = prediction_data.get("prediction")
+            disease_info = prediction_data.get("disease_info")
 
-                    if not disease_prediction:
-                        return JsonResponse(
-                            {"error": "Disease prediction not found in response."},
-                            status=500,
-                        )
-
-                    # Generate treatment plan using the disease prediction
-                    template = env.get_template("treatmentplan.html.jinja")
-                    prompt = template.render(
-                        # query=query,
-                        Diseases=disease_info,
-                    )
-
-                    # Generate content using Gemini
-                    gemini_response = model.generate_content(prompt)
-
-                    if not gemini_response or not gemini_response.text:
-                        return JsonResponse(
-                            {"error": "Failed to generate treatment plan"}, status=500
-                        )
-
-                    return JsonResponse(
-                        {
-                            "success": True,
-                            "query": query,
-                            "prediction": disease_prediction,
-                            "disease": disease_info,
-                            "treatment_plan": gemini_response.text,
-                        }
-                    )
-
-                except Exception as e:
-                    return JsonResponse(
-                        {
-                            "error": f"Error processing response: {str(e)}",
-                            "response_content": response_data,
-                        },
-                        status=500,
-                    )
-            else:
+            if not disease_prediction:
                 return JsonResponse(
-                    {
-                        "error": "Error from Runpod",
-                        "details": response.text,
-                        "status_code": response.status_code,
-                    },
-                    status=response.status_code,
+                    {"error": "Disease prediction not found in response."}, status=500
                 )
+
+            # Generate treatment plan
+            template = env.get_template("treatmentplan.html.jinja")
+            prompt = template.render(Diseases=disease_info)
+            gemini_response = model.generate_content(prompt)
+
+            if not gemini_response or not gemini_response.text:
+                return JsonResponse(
+                    {"error": "Failed to generate treatment plan"}, status=500
+                )
+
+            treatment_plan = gemini_response.text
+
+            # **Save Patient's Query**
+            save_chat_message(patient_id, "patient", query)
+
+            # **Save AI's Response**
+            save_chat_message(patient_id, "doctor", treatment_plan)
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "query": query,
+                    "prediction": disease_prediction,
+                    "disease": disease_info,
+                    "treatment_plan": treatment_plan,
+                }
+            )
 
         except Exception as e:
             return JsonResponse(
-                {"error": f"Error reading CSV file: {str(e)}"}, status=500
+                {"error": f"Error processing response: {str(e)}"},
+                status=500,
             )
 
     except Exception as e:
         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
 
 
-from django.core.exceptions import ObjectDoesNotExist
+def save_chat_message(patient_id, sender, message_text):
+    """Helper function to store messages in chat history."""
+    try:
+        patient = Patient.objects.get(id=patient_id)
+        chat_session, _ = ChatSession.objects.get_or_create(patient=patient)
+
+        chat_session.messages.append(
+            {"sender": sender, "text": message_text, "timestamp": now().isoformat()}
+        )
+        chat_session.save()
+    except Exception as e:
+        print(f"Error saving chat message: {e}")  # Log error
 
 
 def fetch_all_patients(request):
@@ -163,6 +158,21 @@ def fetch_all_patients(request):
 
     except Exception as e:
         return JsonResponse({"status": "error", "message": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_POST
+def fetch_chat_history(request):
+    """
+    Fetch the chat history for a patient.
+    """
+    try:
+        data = json.loads(request.body)
+        patient_id = data.get("patient_id")
+        chat_session = ChatSession.objects.get(patient_id=patient_id)
+        return JsonResponse({"messages": chat_session.messages})
+    except ChatSession.DoesNotExist:
+        return JsonResponse({"messages": []})
 
 
 def hello(request):

@@ -17,4 +17,9 @@ urlpatterns = [
         views.hello,
         name="root",
     ),
+    path(
+        "fetch-chat-history/",
+        views.fetch_chat_history,
+        name="fetch-chat-history",
+    ),
 ]
