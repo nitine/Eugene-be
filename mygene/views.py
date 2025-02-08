@@ -5,27 +5,24 @@ from pathlib import Path
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.views.decorators.http import require_POST
 import google.generativeai as genai
 from jinja2 import Environment, FileSystemLoader
 from mygene.settings import GEMINI_API_KEY, RUNPOD_ENDPOINT_URL
 import prisma
-from asgiref.sync import async_to_sync
-
-# Configure Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-1.5-flash")
-db = prisma.Prisma()
-
-# Set up Jinja environment
-template_dir = Path(__file__).resolve().parent / "templates"
-env = Environment(loader=FileSystemLoader(str(template_dir)))
-
-
 from django.http import JsonResponse
 import requests
 import pandas as pd
 import io
+import traceback
+
+# Configure Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+# Set up Jinja environment
+template_dir = Path(__file__).resolve().parent / "templates"
+env = Environment(loader=FileSystemLoader(str(template_dir)))
 
 
 @csrf_exempt
@@ -136,11 +133,6 @@ def process_csv_and_generate_treatment_plan(request):
     except Exception as e:
         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
 
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import prisma
-import traceback
 
 db = prisma.Prisma()
 
