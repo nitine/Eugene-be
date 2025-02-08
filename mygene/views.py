@@ -14,6 +14,7 @@ from mygene.settings import GEMINI_API_KEY, RUNPOD_ENDPOINT_URL
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
+
 # Set up Jinja environment
 template_dir = Path(__file__).resolve().parent / "templates"
 env = Environment(loader=FileSystemLoader(str(template_dir)))
@@ -34,7 +35,7 @@ def process_csv_and_generate_treatment_plan(request):
     """
     # Check if file exists in request
     query = request.POST.get("query", "Comprehensive treatment plan")
-    print(query)
+
     if "file" not in request.FILES:
         return JsonResponse({"error": "CSV file is required."}, status=400)
 
