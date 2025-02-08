@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_GET
 import google.generativeai as genai
 from jinja2 import Environment, FileSystemLoader
+from mygene.models import Patient
 from mygene.settings import GEMINI_API_KEY, RUNPOD_ENDPOINT_URL
 
 # Configure Gemini
@@ -133,6 +134,35 @@ def process_csv_and_generate_treatment_plan(request):
 
     except Exception as e:
         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
+
+
+from django.core.exceptions import ObjectDoesNotExist
+
+
+def fetch_all_patients(request):
+    """
+    View function to fetch all patients using the Django ORM.
+    Returns a JSON response containing a list of patients.
+    """
+    try:
+        patients = Patient.objects.all()
+
+        patients_list = [
+            {
+                "id": str(patient.id),
+                "name": patient.name,
+                "age": patient.age,
+                "gender": patient.gender,
+                "symptoms": patient.symptoms,
+                "is_pending": patient.is_pending,
+            }
+            for patient in patients
+        ]
+
+        return JsonResponse({"status": "success", "patients": patients_list})
+
+    except Exception as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=500)
 
 
 def hello(request):
