@@ -3,7 +3,7 @@ from . import views
 
 urlpatterns = [
     path(
-        "gen-treatment-plan/",
+        "process-csv/",
         views.process_csv_and_generate_treatment_plan,
         name="gen-treatment-plan",
     ),
