@@ -175,5 +175,39 @@ def fetch_chat_history(request):
         return JsonResponse({"messages": []})
 
 
+@csrf_exempt
+def add_patient(request):
+    """
+    Add a new patient to the database.
+    """
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            name = data.get("name")
+            age = data.get("age")
+            gender = data.get("gender")
+            symptoms = data.get("symptoms", [])
+
+            if not name or not age or gender not in dict(Patient.GENDER_CHOICES):
+                return JsonResponse({"error": "Invalid or missing fields"}, status=400)
+
+            # Create new patient
+            patient = Patient.objects.create(
+                name=name,
+                age=age,
+                gender=gender,
+                symptoms=symptoms,
+            )
+
+            return JsonResponse({"success": True, "patient_id": str(patient.id)})
+
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON format"}, status=400)
+        except Exception as e:
+            return JsonResponse({"error": str(e)}, status=500)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+
 def hello(request):
     return HttpResponse("Hello, world!")
