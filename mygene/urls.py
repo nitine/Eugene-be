@@ -8,6 +8,11 @@ urlpatterns = [
         name="gen-treatment-plan",
     ),
     path(
+        "get-patients/",
+        views.get_patients,
+        name="get-patients",
+    ),
+    path(
         "",
         views.hello,
         name="root",

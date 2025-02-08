@@ -9,11 +9,13 @@ from django.views.decorators.http import require_POST, require_GET
 import google.generativeai as genai
 from jinja2 import Environment, FileSystemLoader
 from mygene.settings import GEMINI_API_KEY, RUNPOD_ENDPOINT_URL
+import prisma
+from asgiref.sync import async_to_sync
 
 # Configure Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-1.5-flash")
-
+db = prisma.Prisma()
 
 # Set up Jinja environment
 template_dir = Path(__file__).resolve().parent / "templates"
@@ -135,5 +137,30 @@ def process_csv_and_generate_treatment_plan(request):
         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
 
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import prisma
+import traceback
+
+db = prisma.Prisma()
+
+
+async def get_patients(request):
+    try:
+        await db.connect()
+        patients = await db.patient.find_many(include={"medicalRecords": True})
+        await db.disconnect()
+
+        # ✅ Convert Patient objects to dictionaries
+        patients_list = [patient.model_dump() for patient in patients]
+
+        return JsonResponse({"patients": patients_list}, safe=False)
+
+    except Exception as e:
+        error_message = traceback.format_exc()
+        print(error_message)
+        return JsonResponse({"error": str(e), "details": error_message}, status=500)
+
+
 def hello(request):
-    return HttpResponse("Hello, world!")
+    return HttpResponse("Hello, World!")

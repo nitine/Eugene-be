@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+model Patient {
+  id             String          @id @default(uuid())
+  Name           String
+  age            Int
+  gender         Gender
+  contactNumber  String?
+  address        String?
+  createdAt      DateTime        @default(now())
+  medicalRecords MedicalRecord[]
+  genomicData    GenomicData[]
+  chatSessions   ChatSession[]
+}
+
+model MedicalRecord {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id])
+  diagnosis String?
+  symptoms  String[]
+  isPending Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model GenomicData {
+  id              String   @id @default(uuid())
+  patientId       String
+  patient         Patient  @relation(fields: [patientId], references: [id])
+  rawData         String
+  analysisResults Json?
+  uploadedAt      DateTime @default(now())
+}
+
+model ChatSession {
+  id            String   @id @default(uuid())
+  patientId     String
+  patient       Patient  @relation(fields: [patientId], references: [id])
+  query         String
+  fileName      String?
+  disease       String?
+  treatmentPlan String?
+  createdAt     DateTime @default(now())
+}
