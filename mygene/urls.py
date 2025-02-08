@@ -22,4 +22,5 @@ urlpatterns = [
         views.fetch_chat_history,
         name="fetch-chat-history",
     ),
+    path("add-patient/", views.add_patient, name="add-patient"),
 ]
