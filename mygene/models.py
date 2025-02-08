@@ -50,7 +50,7 @@ class ChatSession(models.Model):
     patient = models.ForeignKey(
         Patient, on_delete=models.CASCADE, related_name="chat_sessions"
     )
-    messages = JSONField()
+    messages = JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
