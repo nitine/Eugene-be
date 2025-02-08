@@ -33,6 +33,8 @@ def process_csv_and_generate_treatment_plan(request):
     and generates a treatment plan based on the prediction.
     """
     # Check if file exists in request
+    query = request.POST.get("query", "Comprehensive treatment plan")
+    print(query)
     if "file" not in request.FILES:
         return JsonResponse({"error": "CSV file is required."}, status=400)
 
@@ -72,6 +74,7 @@ def process_csv_and_generate_treatment_plan(request):
                         prediction_data = response.json()
 
                     disease_prediction = prediction_data.get("prediction")
+                    disease_info = prediction_data.get("disease_info")
 
                     if not disease_prediction:
                         return JsonResponse(
@@ -82,13 +85,13 @@ def process_csv_and_generate_treatment_plan(request):
                     # Generate treatment plan using the disease prediction
                     template = env.get_template("treatmentplan.html.jinja")
                     prompt = template.render(
-                        query="Comprehensive treatment plan",
-                        Diseases=disease_prediction,
+                        # query=query,
+                        Diseases=disease_info,
                     )
 
                     # Generate content using Gemini
                     gemini_response = model.generate_content(prompt)
-                    print(gemini_response)
+
                     if not gemini_response or not gemini_response.text:
                         return JsonResponse(
                             {"error": "Failed to generate treatment plan"}, status=500
@@ -97,7 +100,9 @@ def process_csv_and_generate_treatment_plan(request):
                     return JsonResponse(
                         {
                             "success": True,
+                            "query": query,
                             "prediction": disease_prediction,
+                            "disease": disease_info,
                             "treatment_plan": gemini_response.text,
                         }
                     )
@@ -127,66 +132,6 @@ def process_csv_and_generate_treatment_plan(request):
 
     except Exception as e:
         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
-
-
-# @require_GET
-# def process_csv_and_generate_treatment_plan(request):
-#     """
-#     Accepts a GET request, uses a hardcoded CSV file, sends it to the Runpod endpoint for disease prediction,
-#     and generates a treatment plan based on the prediction.
-#     """
-#     # Hardcode the path to your CSV file (update this path as needed)
-#     csv_file_path = "/home/nitin/yantra/backend/patients_data/sample_input.csv"
-
-#     try:
-#         # Open the CSV file in binary read mode
-#         with open(csv_file_path, "rb") as csv_file:
-#             # Prepare the file for the POST to Runpod
-#             files = {"file": open(csv_file_path, "rb")}
-#             response = requests.post(
-#                 "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=files
-#             )
-
-#         if response.status_code == 200:
-#             try:
-#                 result = response.json()
-#                 disease_prediction = result.get("disease_prediction")
-#                 if not disease_prediction:
-#                     return JsonResponse(
-#                         {"error": "Disease prediction not found in response."},
-#                         status=500,
-#                     )
-
-#                 # Generate the treatment plan using the disease prediction.
-#                 # Here we assume you are using a Jinja2 template to create the prompt.
-#                 template = env.get_template("treatmentplan.html.jinja")
-#                 prompt = template.render(
-#                     query="Comprehensive treatment plan", Diseases=disease_prediction
-#                 )
-
-#                 # Generate content with your model
-#                 gemini_response = model.generate_content(prompt)
-#                 if not gemini_response or not gemini_response.text:
-#                     return JsonResponse(
-#                         {"error": "Failed to generate treatment plan"}, status=500
-#                     )
-
-#                 return JsonResponse(
-#                     {"success": True, "treatment_plan": gemini_response.text}
-#                 )
-
-#             except ValueError:
-#                 return JsonResponse(
-#                     {"error": "Invalid response format from Runpod."}, status=500
-#                 )
-#         else:
-#             return JsonResponse(
-#                 {"error": "Error from Runpod", "details": response.text},
-#                 status=response.status_code,
-#             )
-
-#     except Exception as e:
-#         return JsonResponse({"error": f"Error occurred: {str(e)}"}, status=500)
 
 
 def hello(request):
