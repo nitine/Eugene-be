@@ -81,11 +81,11 @@ def process_csv_and_generate_treatment_plan(request):
             disease_prediction = prediction_data.get("prediction")
             disease_info = prediction_data.get("disease_info")
 
-            if not disease_prediction:
-                return JsonResponse(
-                    {"error": "Disease prediction not found in response."},
-                    status=500,
-                )
+            # if not disease_prediction:
+            #     return JsonResponse(
+            #         {"error": "Disease prediction not found in response."},
+            #         status=500,
+            #     )
 
             # 🔹 Generate treatment plan using Gemini
             template = env.get_template("treatmentplan.html.jinja")
