@@ -59,13 +59,15 @@ def process_csv_and_generate_treatment_plan(request):
 
         csv_file.seek(0)  # ✅ Reset file pointer
 
-        files = {
+        file = {
             "file": (csv_file.name, csv_file, "text/csv")
         }  # ✅ Send file object, not read content
 
+        print(f"Sending file to Runpod: {csv_file.name}")
+
         # 🔹 Send to Runpod for prediction
         response = requests.post(
-            "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=files
+            "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=file
         )
 
         if response.status_code != 200:
