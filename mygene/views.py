@@ -51,10 +51,19 @@ def process_csv_and_generate_treatment_plan(request):
         if not csv_file.name.endswith(".csv"):
             return JsonResponse({"error": "File must be a CSV."}, status=400)
 
+        # 🔹 Read file and reset pointer before sending
         file_content = csv_file.read()
-        files = {"file": (csv_file.name, file_content, "text/csv")}
 
-        # Send to Runpod for prediction
+        if len(file_content) == 0:
+            return JsonResponse({"error": "Uploaded CSV file is empty."}, status=400)
+
+        csv_file.seek(0)  # ✅ Reset file pointer
+
+        files = {
+            "file": (csv_file.name, csv_file, "text/csv")
+        }  # ✅ Send file object, not read content
+
+        # 🔹 Send to Runpod for prediction
         response = requests.post(
             "https://pangolin-enormous-briefly.ngrok-free.app/predict", files=files
         )
@@ -66,23 +75,17 @@ def process_csv_and_generate_treatment_plan(request):
             )
 
         try:
-            response_data = response.content.decode("utf-8")
-
-            try:
-                df = pd.read_csv(io.StringIO(response_data))
-                prediction_data = df.to_dict("records")[0]
-            except:
-                prediction_data = response.json()
-
+            prediction_data = response.json()
             disease_prediction = prediction_data.get("prediction")
             disease_info = prediction_data.get("disease_info")
 
             if not disease_prediction:
                 return JsonResponse(
-                    {"error": "Disease prediction not found in response."}, status=500
+                    {"error": "Disease prediction not found in response."},
+                    status=500,
                 )
 
-            # Generate treatment plan
+            # 🔹 Generate treatment plan using Gemini
             template = env.get_template("treatmentplan.html.jinja")
             prompt = template.render(Diseases=disease_info)
             gemini_response = model.generate_content(prompt)
@@ -94,10 +97,8 @@ def process_csv_and_generate_treatment_plan(request):
 
             treatment_plan = gemini_response.text
 
-            # **Save Patient's Query**
+            # 🔹 Save Patient's Query & AI Response
             save_chat_message(patient_id, "patient", query)
-
-            # **Save AI's Response**
             save_chat_message(patient_id, "doctor", treatment_plan)
 
             return JsonResponse(
@@ -112,7 +113,7 @@ def process_csv_and_generate_treatment_plan(request):
 
         except Exception as e:
             return JsonResponse(
-                {"error": f"Error processing response: {str(e)}"},
+                {"error": f"Error processing API response: {str(e)}"},
                 status=500,
             )
 
@@ -161,14 +162,11 @@ def fetch_all_patients(request):
 
 
 @csrf_exempt
-@require_POST
-def fetch_chat_history(request):
+def fetch_chat_history(request, patient_id):
     """
-    Fetch the chat history for a patient.
+    Fetch the chat history for a patient via GET request.
     """
     try:
-        data = json.loads(request.body)
-        patient_id = data.get("patient_id")
         chat_session = ChatSession.objects.get(patient_id=patient_id)
         return JsonResponse({"messages": chat_session.messages})
     except ChatSession.DoesNotExist:
